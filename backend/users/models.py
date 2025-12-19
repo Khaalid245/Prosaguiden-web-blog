@@ -13,5 +13,7 @@ class User(AbstractUser):
         default=Roles.READER
     )
 
+    email = models.EmailField(unique=True)  # ✅ ADDED
+
     def __str__(self):
         return self.username

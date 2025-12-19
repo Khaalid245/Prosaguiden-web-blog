@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     CategoryListCreateView,
     ArticleListCreateView,
-    ArticleDetailView
+    ArticleDetailView,
 )
 
 urlpatterns = [
