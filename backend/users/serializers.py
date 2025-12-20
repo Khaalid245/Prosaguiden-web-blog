@@ -2,11 +2,20 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-import re  # For regex checks
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework.exceptions import AuthenticationFailed
+import re
+
+from .emails import send_verification_email
 
 User = get_user_model()
 
+
 class RegisterSerializer(serializers.ModelSerializer):
+    """
+    Handles user registration with strong password validation
+    and sends verification email.
+    """
     password = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
 
@@ -23,36 +32,21 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def validate_password(self, value):
         """
-        Enforce classic complexity:
-        - At least 8 characters
-        - At least 1 uppercase letter
-        - At least 1 lowercase letter
-        - At least 1 number
-        - At least 1 special symbol
+        Strong password rules
         """
         errors = []
 
-        # Length check
         if len(value) < 8:
             errors.append("Password must be at least 8 characters long.")
-
-        # Uppercase letter
         if not re.search(r'[A-Z]', value):
             errors.append("Password must contain at least one uppercase letter.")
-
-        # Lowercase letter
         if not re.search(r'[a-z]', value):
             errors.append("Password must contain at least one lowercase letter.")
-
-        # Number
         if not re.search(r'[0-9]', value):
             errors.append("Password must contain at least one number.")
+        if not re.search(r'[!@#$%^&*(),.?\":{}|<>]', value):
+            errors.append("Password must contain at least one special symbol.")
 
-        # Special character
-        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', value):
-            errors.append("Password must contain at least one special symbol (@#$ etc.).")
-
-        # Django built-in password validators (optional, keeps previous checks)
         try:
             validate_password(value)
         except ValidationError as e:
@@ -72,5 +66,30 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('password2')
+
+        # ✅ User created but NOT verified
         user = User.objects.create_user(**validated_data)
+        user.is_verified = False
+        user.save()
+
+        # ✅ Send verification email
+        send_verification_email(user)
+
         return user
+
+
+# 🔒 ADDED: Custom JWT serializer to block unverified users
+class VerifiedTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """
+    Prevents login if email is not verified.
+    """
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        if not self.user.is_verified:
+            raise AuthenticationFailed(
+                "Please verify your email before logging in."
+            )
+
+        return data

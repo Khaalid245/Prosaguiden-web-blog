@@ -13,7 +13,11 @@ class User(AbstractUser):
         default=Roles.READER
     )
 
-    email = models.EmailField(unique=True)  # ✅ ADDED
+    # Make sure email is unique
+    email = models.EmailField(unique=True)
+
+    # ✅ New field to track email verification
+    is_verified = models.BooleanField(default=False)
 
     def __str__(self):
         return self.username
